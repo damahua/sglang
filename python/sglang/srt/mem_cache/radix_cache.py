@@ -160,10 +160,18 @@ class RadixKey:
             return (matched // page_size) * page_size if page_size > 1 else matched
 
         if page_size == 1:
+            # Chunked common-prefix scan: list[i:i+chunk] != list[i:i+chunk] is implemented
+            # in C and is dramatically faster than a Python-level per-element zip-loop for
+            # the typical workload (long shared prefix from system prompts / chat templates).
+            # Falls back to per-element scan only inside the diverging chunk.
+            n = min(len(t0), len(t1))
+            chunk = 32
             i = 0
-            for a, b in zip(t0, t1):
-                if a != b:
+            while i + chunk <= n:
+                if t0[i : i + chunk] != t1[i : i + chunk]:
                     break
+                i += chunk
+            while i < n and t0[i] == t1[i]:
                 i += 1
             return i
 
